@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地智搜助理 - Local Search Hub</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        },
+                        dark: {
+                            bg: '#0f172a',
+                            card: '#1e293b',
+                            border: '#334155',
+                            hover: '#475569'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .highlight-text {
+            background-color: rgba(234, 179, 8, 0.25);
+            color: #fef08a;
+            padding: 0 4px;
+            border-radius: 2px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col antialiased">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- 1. Header & Navigation -->
+    <header class="bg-slate-800/80 backdrop-blur-md border-b border-slate-700/80 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo & System Title -->
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
+                        <i class="fa-solid fa-magnifying-glass-chart text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                            本地智搜助理
+                        </span>
+                        <span class="text-xs text-brand-500 font-semibold px-2 py-0.5 rounded bg-brand-500/10 ml-2 border border-brand-500/20">v1.0 Local</span>
+                    </div>
+                </div>
+
+                <!-- Server Status Indicator & Controls (Desktop) -->
+                <div class="hidden md:flex items-center gap-4">
+                    <!-- Status Badge -->
+                    <button onclick="openApiModal()" class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-slate-900/60 border border-slate-700 hover:border-slate-600 transition text-xs font-medium cursor-pointer">
+                        <span id="status-ping-dot" class="relative flex h-2.5 w-2.5">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                        </span>
+                        <span id="status-text" class="text-slate-300">FastAPI: 192.168.1.100:8000</span>
+                        <i class="fa-solid fa-gear text-slate-400 ml-1"></i>
+                    </button>
+
+                    <!-- Theme/Quick Actions -->
+                    <button onclick="toggleMockStatus()" class="px-3 py-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium border border-slate-600/50 transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-wifi text-emerald-400" id="mock-status-icon"></i>
+                        <span id="mock-status-btn-text">模擬服務中</span>
+                    </button>
+                </div>
+
+                <!-- Mobile Hamburger Button -->
+                <div class="flex md:hidden items-center gap-2">
+                    <button onclick="openApiModal()" class="p-2 text-slate-400 hover:text-white">
+                        <i class="fa-solid fa-plug text-emerald-400"></i>
+                    </button>
+                    <button id="mobile-menu-btn" onclick="toggleMobileMenu()" class="p-2 text-slate-400 hover:text-white focus:outline-none">
+                        <i class="fa-solid fa-bars text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Menu Drawer -->
+        <div id="mobile-menu" class="hidden md:hidden border-t border-slate-700/80 bg-slate-800 px-4 pt-3 pb-4 space-y-3">
+            <div class="flex items-center justify-between text-xs text-slate-400 py-1">
+                <span>後端連線狀態:</span>
+                <span class="text-emerald-400 font-medium">區網已連線</span>
+            </div>
+            <button onclick="openApiModal()" class="w-full text-left px-3 py-2 rounded-md bg-slate-900 text-sm font-medium text-slate-200 flex items-center justify-between">
+                <span><i class="fa-solid fa-server mr-2 text-brand-500"></i> API 設定 (192.168.1.100)</span>
+                <i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- 2. Dashboard Stat & Scanning Control Panel -->
+        <section class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4 sm:p-6 shadow-xl backdrop-blur-sm">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                <!-- Left: Control & Path Entry -->
+                <div class="flex-1 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-base font-semibold text-slate-200 flex items-center gap-2">
+                            <i class="fa-solid fa-folder-tree text-brand-500"></i>
+                            硬碟目錄索引管理
+                        </h2>
+                        <span id="scan-badge" class="text-xs px-2.5 py-1 rounded-full bg-slate-700 text-slate-300 font-medium">待命狀態</span>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-hard-drive absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                            <input type="text" id="scan-path-input" value="D:\Documents, E:\Photos_Archive" 
+                                class="w-full pl-10 pr-4 py-2 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" placeholder="輸入搜尋目錄路徑 (多個用號分隔)">
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="btn-start-scan" onclick="toggleScan()" class="flex-1 sm:flex-initial px-5 py-2 bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-brand-600/25">
+                                <i class="fa-solid fa-play" id="scan-btn-icon"></i>
+                                <span id="scan-btn-text">開始掃描與 OCR</span>
+                            </button>
+                            <button onclick="resetIndex()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-xl transition text-sm" title="重置 SQLite 索引">
+                                <i class="fa-solid fa-rotate-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Scan Real-time Progress -->
+                    <div id="progress-container" class="space-y-1.5 pt-1">
+                        <div class="flex justify-between text-xs text-slate-400">
+                            <span id="progress-status-text">現有資料庫索引進度</span>
+                            <span id="progress-percent-text" class="font-mono text-brand-400 font-semibold">100%</span>
+                        </div>
+                        <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-700/50">
+                            <div id="progress-bar" class="bg-gradient-to-r from-brand-600 to-emerald-400 h-2 rounded-full transition-all duration-300" style="width: 100%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: High-Level Stats Cards -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t lg:border-t-0 lg:border-l border-slate-700/60 pt-4 lg:pt-0 lg:pl-6 min-w-[320px]">
+                    <div class="bg-slate-900/50 border border-slate-700/40 p-3 rounded-xl text-center">
+                        <span class="block text-xs text-slate-400">總檔案數</span>
+                        <span class="text-xl font-bold text-white mt-1 block" id="stat-total">32,850</span>
+                    </div>
+                    <div class="bg-slate-900/50 border border-slate-700/40 p-3 rounded-xl text-center">
+                        <span class="block text-xs text-slate-400">圖片/OCR</span>
+                        <span class="text-xl font-bold text-emerald-400 mt-1 block" id="stat-ocr">12,410</span>
+                    </div>
+                    <div class="bg-slate-900/50 border border-slate-700/40 p-3 rounded-xl text-center">
+                        <span class="block text-xs text-slate-400">PDF 文件</span>
+                        <span class="text-xl font-bold text-indigo-400 mt-1 block" id="stat-pdf">8,920</span>
+                    </div>
+                    <div class="bg-slate-900/50 border border-slate-700/40 p-3 rounded-xl text-center">
+                        <span class="block text-xs text-slate-400">SQLite 大小</span>
+                        <span class="text-xl font-bold text-amber-400 mt-1 block" id="stat-db">148 MB</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Search & Multi-filter Section -->
+        <section class="space-y-4">
+            <!-- Search Bar Input -->
+            <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <i class="fa-solid fa-magnifying-glass text-slate-400 text-lg"></i>
+                </div>
+                <input type="text" id="search-input" 
+                    oninput="handleSearchInput()" 
+                    class="w-full pl-12 pr-12 py-3.5 bg-slate-800/90 border border-slate-700 rounded-2xl text-base text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent shadow-lg" 
+                    placeholder="輸入關鍵字（支援檔名、PDF內文、圖片OCR文字如『發票』、『合約』、『Python』）...">
+                <button id="clear-search" onclick="clearSearch()" class="hidden absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-circle-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Filters & Quick Tags -->
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-800/30 p-2.5 rounded-xl border border-slate-800">
+                <!-- Type Filter Tabs -->
+                <div class="flex items-center space-x-1 bg-slate-900/80 p-1 rounded-lg border border-slate-700/60 text-xs font-medium">
+                    <button onclick="setFilter('all')" id="filter-all" class="filter-tab active px-3 py-1.5 rounded-md text-white bg-brand-600 transition">全部 (All)</button>
+                    <button onclick="setFilter('image')" id="filter-image" class="filter-tab px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition">圖片 / OCR</button>
+                    <button onclick="setFilter('doc')" id="filter-doc" class="filter-tab px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition">文字文件 (PDF/DOC)</button>
+                    <button onclick="setFilter('txt')" id="filter-txt" class="filter-tab px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition">純文本 (TXT/Code)</button>
+                </div>
+
+                <!-- Quick Click Hot Keywords -->
+                <div class="flex items-center gap-1.5 text-xs text-slate-400 overflow-x-auto py-1">
+                    <span class="whitespace-nowrap"><i class="fa-solid fa-fire text-amber-500 mr-1"></i>熱門關鍵字:</span>
+                    <button onclick="quickSearch('財務發票')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 whitespace-nowrap border border-slate-700">財務發票</button>
+                    <button onclick="quickSearch('系統架構')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 whitespace-nowrap border border-slate-700">系統架構</button>
+                    <button onclick="quickSearch('會議紀錄')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 whitespace-nowrap border border-slate-700">會議紀錄</button>
+                    <button onclick="quickSearch('身份證')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 whitespace-nowrap border border-slate-700">身份證</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Search Results Header & View Toggle -->
+        <section class="space-y-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-semibold text-slate-300">搜尋結果</h3>
+                    <span id="results-count-badge" class="px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 text-xs font-semibold">0 筆結果</span>
+                    <span id="search-time" class="text-xs text-slate-500"></span>
+                </div>
+
+                <!-- View Switcher (Grid/List) -->
+                <div class="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
+                    <button onclick="setViewMode('grid')" id="view-grid-btn" class="p-1.5 rounded text-white bg-slate-700 transition">
+                        <i class="fa-solid fa-border-all"></i>
+                    </button>
+                    <button onclick="setViewMode('list')" id="view-list-btn" class="p-1.5 rounded text-slate-400 hover:text-white transition">
+                        <i class="fa-solid fa-list"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Container -->
+            <div id="results-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Dynamic Results standard injected by JS -->
+            </div>
+
+            <!-- Empty State Display -->
+            <div id="empty-state" class="hidden flex flex-col items-center justify-center py-16 bg-slate-800/20 border border-dashed border-slate-700 rounded-2xl text-center">
+                <div class="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-4 text-slate-500">
+                    <i class="fa-solid fa-folder-open text-2xl"></i>
+                </div>
+                <h4 class="text-base font-semibold text-slate-300">找不到符合的檔案</h4>
+                <p class="text-sm text-slate-500 mt-1 max-w-sm">嘗試更換搜尋關鍵字、切換檔案類型分類，或先點擊上方「開始掃描」進行硬碟索引更新。</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- 5. Footer -->
+    <footer class="mt-auto border-t border-slate-800 bg-slate-950/60 py-4 text-center text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <span>本地智搜助理 &copy; 2026 離線多模態檔案與 OCR 管理器</span>
+            <span class="flex items-center gap-2">
+                <i class="fa-solid fa-shield-halved text-emerald-500"></i> 100% 數據本機硬碟安全儲存 (Zero Cloud Data Leak)
+            </span>
+        </div>
+    </footer>
+
+    <!-- Modal: Local Python API Server Settings -->
+    <div id="api-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden px-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <button onclick="closeApiModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="p-2.5 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-400">
+                    <i class="fa-solid fa-server text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-white">Windows 本地 FastAPI 設定</h3>
+                    <p class="text-xs text-slate-400">連線至離線運行的 Python 後端</p>
+                </div>
+            </div>
+
+            <div class="space-y-4 text-sm">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">FastAPI 服務端點 URL</label>
+                    <input type="text" id="api-url-input" value="http://192.168.1.100:8000" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs focus:ring-2 focus:ring-brand-500 outline-none">
+                    <p class="text-[11px] text-slate-500 mt-1">例如桌機本機 `http://localhost:8000` 或手機區網 `http://192.168.1.xxx:8000`</p>
+                </div>
+
+                <div class="p-3 bg-slate-900/60 rounded-lg border border-slate-700/60 space-y-2 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Python 服務狀態:</span>
+                        <span id="api-health-status" class="text-emerald-400 font-medium">健康 (Health OK)</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">OCR 引擎 (PaddleOCR):</span>
+                        <span class="text-slate-200">已載入 (CPU/GPU)</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">FTS5 全文索引引擎:</span>
+                        <span class="text-slate-200">SQLite3 啟用</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 pt-2">
+                    <button onclick="testApiConnection()" class="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-lg text-xs transition">
+                        <i class="fa-solid fa-plug-circle-check mr-1"></i> 測試 Ping 連線
+                    </button>
+                    <button onclick="saveApiSettings()" class="flex-1 py-2 bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-lg text-xs transition shadow-md shadow-brand-600/30">
+                        儲存變更
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: OCR Full Text Viewer -->
+    <div id="ocr-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden px-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[85vh] flex flex-col">
+            <button onclick="closeOcrModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            
+            <div class="flex items-center gap-3 mb-4">
+                <i class="fa-solid fa-file-lines text-brand-400 text-xl"></i>
+                <h3 class="text-base font-bold text-white" id="ocr-modal-title">完整 OCR 解析內文</h3>
+            </div>
+
+            <div class="flex-1 overflow-y-auto bg-slate-900 p-4 rounded-xl border border-slate-700/80 text-slate-300 font-mono text-xs leading-relaxed whitespace-pre-wrap select-all mb-4" id="ocr-modal-content">
+                <!-- Injected text -->
+            </div>
+
+            <div class="flex justify-between items-center pt-2">
+                <span class="text-xs text-slate-500">已由 PaddleOCR 離線模型完成字元辨識</span>
+                <button onclick="copyOcrModalText()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-medium transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-copy"></i> 複製全部文字
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // --- Mock Data Store (High realism offline dataset) ---
+        const MOCK_DATA = [
+            {
+                id: 1,
+                name: "202604_全家便利商店_電子發票掃描.png",
+                path: "D:\\Photos_Archive\\Invoices\\202604_全家便利商店_電子發票掃描.png",
+                type: "image",
+                ext: "PNG",
+                size: "2.4 MB",
+                mtime: "2026-04-12 14:22",
+                ocr: "全家便利商店 統一發票 115年03-04月 號碼: GU-88910234 隨機碼: 9012 項目: 拿鐵咖啡大杯 $55, 鮪魚飯糰 $30, 總計 $85 元 感謝光臨",
+                preview: "https://placehold.co/400x250/1e293b/6366f1?text=Invoice+Scan+OCR"
+            },
+            {
+                id: 2,
+                name: "Q2_系統核心架構規劃書_v3.pdf",
+                path: "D:\\Documents\\Work\\Q2_系統核心架構規劃書_v3.pdf",
+                type: "doc",
+                ext: "PDF",
+                size: "14.8 MB",
+                mtime: "2026-03-28 09:15",
+                ocr: "本文件定義 2026 Q2 本地智搜助理系統架構，採用 Python FastAPI 作為核心後端 API，搭配 SQLite FTS5 全文檢索與 PaddleOCR 本地離線圖片辨識引擎。確保 Windows 與 Android 端連線資料安全性。",
+                preview: null
+            },
+            {
+                id: 3,
+                name: "2026_財務報表與稅務申報備忘錄.docx",
+                path: "D:\\Documents\\Finance\\2026_財務報表與稅務申報備忘錄.docx",
+                type: "doc",
+                ext: "DOCX",
+                size: "3.1 MB",
+                mtime: "2026-04-01 16:40",
+                ocr: "關鍵字：財務發票、扣繳憑單、營業稅申報。重點項目：包含4月份設備採購發票與伺服器硬體升級支出項目。請保留原始圖片記錄憑證。",
+                preview: null
+            },
+            {
+                id: 4,
+                name: "會議紀錄_跨平台手機端討論.txt",
+                path: "D:\\Documents\\Notes\\會議紀錄_跨平台手機端討論.txt",
+                type: "txt",
+                ext: "TXT",
+                size: "18 KB",
+                mtime: "2026-04-18 11:05",
+                ocr: "與會人員: Alex, Ken. 討論主題: Android 手機端 PWA / WebApp 離線連接模式。重點: 區網自動搜尋 FastAPI Port 8000。幾萬筆資料於 SQLite 查詢回應時間控制在 15ms 以內。",
+                preview: null
+            },
+            {
+                id: 5,
+                name: "個人身分證件備份截圖.jpg",
+                path: "E:\\Photos_Archive\\Personal\\個人身分證件備份截圖.jpg",
+                type: "image",
+                ext: "JPG",
+                size: "1.8 MB",
+                mtime: "2025-11-04 20:10",
+                ocr: "中華民國國民身分證 姓名: 王小明 性別: 男 生日: 民國85年5月20日 統一編號: A123456789 發證日期: 民國110年10月10日 (北市換發)",
+                preview: "https://placehold.co/400x250/1e293b/10b981?text=ID+Card+OCR"
+            },
+            {
+                id: 6,
+                name: "fastapi_server_core.py",
+                path: "D:\\Dev\\LocalSearch\\fastapi_server_core.py",
+                type: "txt",
+                ext: "PY",
+                size: "42 KB",
+                mtime: "2026-04-20 18:30",
+                ocr: "from fastapi import FastAPI\nimport sqlite3\nfrom paddleocr import PaddleOCR\napp = FastAPI()\n@app.get('/search')\ndef search_query(q: str): sqlite_cursor.execute('SELECT * FROM files_fts WHERE files_fts MATCH ?', (q,))",
+                preview: null
+            }
+        ];
+
+        // --- App State ---
+        let currentFilter = 'all';
+        let viewMode = 'grid'; // 'grid' | 'list'
+        let isScanning = false;
+        let scanInterval = null;
+        let mockServerActive = true;
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderResults(MOCK_DATA);
+        });
+
+        // --- Navigation & UI Handlers ---
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            const gridBtn = document.getElementById('view-grid-btn');
+            const listBtn = document.getElementById('view-list-btn');
+            const container = document.getElementById('results-container');
+
+            if (mode === 'grid') {
+                gridBtn.className = "p-1.5 rounded text-white bg-slate-700 transition";
+                listBtn.className = "p-1.5 rounded text-slate-400 hover:text-white transition";
+                container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4";
+            } else {
+                listBtn.className = "p-1.5 rounded text-white bg-slate-700 transition";
+                gridBtn.className = "p-1.5 rounded text-slate-400 hover:text-white transition";
+                container.className = "flex flex-col gap-3";
+            }
+            // Re-render
+            handleSearchInput();
+        }
+
+        function setFilter(filterType) {
+            currentFilter = filterType;
+            document.querySelectorAll('.filter-tab').forEach(btn => {
+                btn.className = "filter-tab px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition";
+            });
+            const activeTab = document.getElementById(`filter-${filterType}`);
+            if (activeTab) {
+                activeTab.className = "filter-tab active px-3 py-1.5 rounded-md text-white bg-brand-600 transition";
+            }
+            handleSearchInput();
+        }
+
+        // --- Search Logic ---
+        function handleSearchInput() {
+            const query = document.getElementById('search-input').value.trim().toLowerCase();
+            const clearBtn = document.getElementById('clear-search');
+            
+            if (query.length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+
+            const startTime = performance.now();
+
+            // Filter logic
+            const filtered = MOCK_DATA.filter(item => {
+                // Type filter
+                if (currentFilter !== 'all' && item.type !== currentFilter) {
+                    return false;
+                }
+                // Keyword match (Name, Path, OCR text)
+                if (!query) return true;
+                return item.name.toLowerCase().includes(query) ||
+                       item.path.toLowerCase().includes(query) ||
+                       item.ocr.toLowerCase().includes(query);
+            });
+
+            const duration = (performance.now() - startTime).toFixed(1);
+            document.getElementById('search-time').innerText = query ? `(耗時 ${duration} ms)` : '';
+
+            renderResults(filtered, query);
+        }
+
+        function quickSearch(keyword) {
+            const searchInput = document.getElementById('search-input');
+            searchInput.value = keyword;
+            handleSearchInput();
+        }
+
+        function clearSearch() {
+            document.getElementById('search-input').value = '';
+            handleSearchInput();
+        }
+
+        // --- Render Search Cards ---
+        function renderResults(data, query = '') {
+            const container = document.getElementById('results-container');
+            const emptyState = document.getElementById('empty-state');
+            const badge = document.getElementById('results-count-badge');
+
+            badge.innerText = `${data.length} 筆結果`;
+
+            if (data.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            container.innerHTML = data.map(item => {
+                const highlightedOcr = highlightKeyword(item.ocr, query);
+                const highlightedName = highlightKeyword(item.name, query);
+
+                // Icon selection
+                let iconClass = "fa-file-lines text-slate-400";
+                if (item.type === 'image') iconClass = "fa-file-image text-emerald-400";
+                if (item.type === 'doc' && item.ext === 'PDF') iconClass = "fa-file-pdf text-indigo-400";
+                if (item.type === 'doc' && item.ext === 'DOCX') iconClass = "fa-file-word text-blue-400";
+
+                if (viewMode === 'grid') {
+                    return `
+                    <div class="bg-slate-800/60 border border-slate-700/70 rounded-xl p-4 flex flex-col justify-between hover:border-slate-600 transition shadow-md group">
+                        <div class="space-y-3">
+                            <!-- Card Top Title & Icon -->
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="flex items-center gap-2.5 overflow-hidden">
+                                    <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-700/60 flex-shrink-0">
+                                        <i class="fa-solid ${iconClass} text-lg"></i>
+                                    </div>
+                                    <div class="overflow-hidden">
+                                        <h4 class="text-sm font-semibold text-slate-100 truncate group-hover:text-brand-400 transition" title="${item.name}">${highlightedName}</h4>
+                                        <span class="text-[11px] text-slate-400 font-mono block truncate">${item.path}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Preview Image if Available -->
+                            ${item.preview ? `
+                                <div class="relative rounded-lg overflow-hidden border border-slate-700/80 bg-slate-900 h-32">
+                                    <img src="${item.preview}" alt="preview" class="w-full h-full object-cover">
+                                    <span class="absolute bottom-1.5 right-1.5 text-[10px] bg-slate-900/80 px-1.5 py-0.5 rounded text-emerald-400 border border-emerald-500/30">OCR 印記</span>
+                                </div>
+                            ` : ''}
+
+                            <!-- OCR Snippet Highlight -->
+                            <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700/50 text-xs text-slate-300 font-mono leading-relaxed line-clamp-3">
+                                ${highlightedOcr}
+                            </div>
+                        </div>
+
+                        <!-- Card Footer Operations -->
+                        <div class="pt-4 mt-3 border-t border-slate-700/50 flex items-center justify-between text-xs text-slate-400">
+                            <span>${item.size} • ${item.mtime}</span>
+                            <div class="flex gap-2">
+                                <button onclick="copyPath('${item.path}')" class="p-1.5 rounded hover:bg-slate-700 hover:text-white transition" title="複製完整路徑">
+                                    <i class="fa-solid fa-copy"></i>
+                                </button>
+                                <button onclick="openOcrModal(${item.id})" class="p-1.5 rounded hover:bg-slate-700 hover:text-white transition" title="檢視全文 OCR">
+                                    <i class="fa-solid fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                } else {
+                    // List View Item
+                    return `
+                    <div class="bg-slate-800/60 border border-slate-700/70 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-slate-600 transition">
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-700/60 flex-shrink-0">
+                                <i class="fa-solid ${iconClass} text-lg"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <h4 class="text-sm font-semibold text-slate-100 truncate">${highlightedName}</h4>
+                                <p class="text-xs text-slate-400 font-mono truncate">${item.path}</p>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-400 whitespace-nowrap hidden lg:block max-w-xs truncate font-mono">
+                            ${highlightedOcr}
+                        </div>
+                        <div class="flex items-center gap-3 text-xs text-slate-400 self-end sm:self-center">
+                            <span>${item.size}</span>
+                            <button onclick="copyPath('${item.path}')" class="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 transition">複製路徑</button>
+                            <button onclick="openOcrModal(${item.id})" class="px-2.5 py-1 rounded bg-brand-600 hover:bg-brand-500 text-white transition">全文</button>
+                        </div>
+                    </div>
+                    `;
+                }
+            }).join('');
+        }
+
+        // --- Helper: Highlight Keyword ---
+        function highlightKeyword(text, keyword) {
+            if (!keyword) return text;
+            const regex = new RegExp(`(${keyword})`, 'gi');
+            return text.replace(regex, `<span class="highlight-text">$1</span>`);
+        }
+
+        // --- Scan Simulation Logic ---
+        function toggleScan() {
+            const btnText = document.getElementById('scan-btn-text');
+            const btnIcon = document.getElementById('scan-btn-icon');
+            const badge = document.getElementById('scan-badge');
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-percent-text');
+            const progressStatus = document.getElementById('progress-status-text');
+
+            if (!isScanning) {
+                // Start Scanning Animation
+                isScanning = true;
+                btnText.innerText = "暫停掃描";
+                btnIcon.className = "fa-solid fa-pause";
+                badge.className = "text-xs px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-400 font-medium animate-pulse";
+                badge.innerText = "背景掃描與 OCR 中...";
+                
+                let progress = 0;
+                scanInterval = setInterval(() => {
+                    progress += Math.floor(Math.random() * 8) + 2;
+                    if (progress > 100) progress = 100;
+
+                    progressBar.style.width = `${progress}%`;
+                    progressText.innerText = `${progress}%`;
+                    progressStatus.innerText = `正在分析 D:\\Documents... (已處理 ${Math.floor(progress * 320)} 個檔案)`;
+
+                    if (progress >= 100) {
+                        clearInterval(scanInterval);
+                        isScanning = false;
+                        btnText.innerText = "開始掃描與 OCR";
+                        btnIcon.className = "fa-solid fa-play";
+                        badge.className = "text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-medium";
+                        badge.innerText = "索引同步完成";
+                        showToast("硬碟掃描與 OCR 全文索引成功更新！");
+                        // Bump stats
+                        document.getElementById('stat-total').innerText = "33,120";
+                    }
+                }, 300);
+            } else {
+                // Pause Scanning
+                clearInterval(scanInterval);
+                isScanning = false;
+                btnText.innerText = "繼續掃描";
+                btnIcon.className = "fa-solid fa-play";
+                badge.className = "text-xs px-2.5 py-1 rounded-full bg-slate-700 text-slate-300 font-medium";
+                badge.innerText = "已暫停";
+                showToast("已暫停背景掃描任務");
+            }
+        }
+
+        function resetIndex() {
+            showToast("已重新初始化 SQLite 全文檢索索引數據庫");
+        }
+
+        // --- API Modal Handlers ---
+        function openApiModal() {
+            document.getElementById('api-modal').classList.remove('hidden');
+        }
+
+        function closeApiModal() {
+            document.getElementById('api-modal').classList.add('hidden');
+        }
+
+        function testApiConnection() {
+            const statusText = document.getElementById('api-health-status');
+            statusText.innerText = "Ping 測試中...";
+            statusText.className = "text-amber-400 font-medium";
+
+            setTimeout(() => {
+                statusText.innerText = "健康 (200 OK - 12ms)";
+                statusText.className = "text-emerald-400 font-medium";
+                showToast("成功連線至本地 Python FastAPI 服務器");
+            }, 600);
+        }
+
+        function saveApiSettings() {
+            const url = document.getElementById('api-url-input').value;
+            document.getElementById('status-text').innerText = `FastAPI: ${url.replace('http://', '')}`;
+            closeApiModal();
+            showToast("本地 API 連線設定已更新");
+        }
+
+        // --- OCR Full Text Modal ---
+        let currentModalOcrText = "";
+
+        function openOcrModal(id) {
+            const item = MOCK_DATA.find(d => d.id === id);
+            if (!item) return;
+
+            document.getElementById('ocr-modal-title').innerText = item.name;
+            document.getElementById('ocr-modal-content').innerText = item.ocr;
+            currentModalOcrText = item.ocr;
+
+            document.getElementById('ocr-modal').classList.remove('hidden');
+        }
+
+        function closeOcrModal() {
+            document.getElementById('ocr-modal').classList.add('hidden');
+        }
+
+        function copyOcrModalText() {
+            copyPath(currentModalOcrText);
+        }
+
+        // --- Copy to Clipboard Utility ---
+        function copyPath(text) {
+            // Using legacy execCommand for maximum compatibility inside inner frames/mobile
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = text;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+
+            showToast("已成功複製至剪貼簿！");
+        }
+
+        // --- Toast Notification Helper ---
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = "bg-slate-800 border border-slate-700 text-white text-xs px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 pointer-events-auto transition-all duration-300 transform translate-y-2 opacity-0";
+            toast.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- Toggle Mock Status ---
+        function toggleMockStatus() {
+            mockServerActive = !mockServerActive;
+            const icon = document.getElementById('mock-status-icon');
+            const btnText = document.getElementById('mock-status-btn-text');
+            const pingDot = document.getElementById('status-ping-dot');
+
+            if (mockServerActive) {
+                icon.className = "fa-solid fa-wifi text-emerald-400";
+                btnText.innerText = "模擬服務中";
+                pingDot.innerHTML = `
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                `;
+                showToast("已切換為本地模擬測試資料");
+            } else {
+                icon.className = "fa-solid fa-wifi-slash text-slate-500";
+                btnText.innerText = "實際 API 連線";
+                pingDot.innerHTML = `<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-500"></span>`;
+                showToast("已嘗試切換為 Windows 實體後端 API 模式");
+            }
+        }
+    </script>
+</body>
+</html>
